@@ -36,10 +36,15 @@ private:
 	double m_delayCount = 0;
 	double m_soundCount = 0;
 
-	u8* m_ram;
-	u16* m_pc;
+	u8* m_ram; // memory
+	u16* m_pc; // program counter
 
-	u16* m_stack;
-	u16* m_stackPtr;
-	bool* m_renderData;
+	u16* m_stack; // stack of addresses
+	int m_stackIdx;
+
+	u16* m_I; // index register
+
+	u8* m_V; // variable registers
+
+	bool* m_renderData; // array of booleans to render (true) or not (false)
 };

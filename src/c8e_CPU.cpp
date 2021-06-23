@@ -1,4 +1,5 @@
 #include <bitset>
+#include <cassert>
 #include <fstream>
 #include <stdlib.h>
 #include <string.h>
@@ -10,8 +11,36 @@
 #define RAM_SIZE (4096)
 #define PROGRAM_OFFSET (512)
 #define STACK_SIZE (16)
+#define NUM_REGISTERS (16)
 #define FONT_OFFSET (80)
 
+// nibbles
+#define _0 (u8)0x00
+#define _1 (u8)0x10
+#define _2 (u8)0x20
+#define _3 (u8)0x30
+#define _4 (u8)0x40
+#define _5 (u8)0x50
+#define _6 (u8)0x60
+#define _7 (u8)0x70
+#define _8 (u8)0x80
+#define _9 (u8)0x90
+#define _A (u8)0xa0
+#define _B (u8)0xb0
+#define _C (u8)0xc0
+#define _D (u8)0xd0
+#define _E (u8)0xe0
+#define _F (u8)0xf0
+
+// opcode decoders
+#define _X ((u8)((n2 >> 4) & 0x0f))
+#define _Y ((u8)((n3 >> 4) & 0x0f))
+#define _N ((u8)((n4 >> 4) & 0x0f))
+#define _NN ((u8)((n4 >> 4) & 0x0f) | n3)
+#define _NNN ((u8)((n4 >> 4) & 0x0f) | n3 | (n2 << 4))
+
+// VF
+#define _VF (m_V[0x0f])
 
 c8e_CPU::c8e_CPU()
 {
@@ -19,15 +48,14 @@ c8e_CPU::c8e_CPU()
 	m_pc = (u16*)(m_ram + PROGRAM_OFFSET);
 
 	m_stack = (u16*)calloc(STACK_SIZE, sizeof(u16));
-	m_stackPtr = m_stack;
+	m_stackIdx = 0;
+
+	m_V = (u8*)calloc(NUM_REGISTERS, sizeof(u16));
 
 	InitFont();
 
 	m_renderData = (bool*) malloc((64 * 32) * sizeof(bool));
-	for (int i = 0; i < (64 * 32); i++)
-	{
-		m_renderData[i] = i % 2 == 0;
-	}
+	ClearScreen();
 
 	LoadRom();
 }
@@ -127,35 +155,95 @@ u16 c8e_CPU::Fetch()
 
 void c8e_CPU::Decode(u16 opcode)
 {
-	u8 nibble1 = 0xf000 & opcode;
-	u8 nibble2 = 0x0f00 & opcode;
-	u8 nibble3 = 0x00f0 & opcode;
-	u8 nibble4 = 0x000f & opcode;
-	switch (nibble1)
+	u8 n1 = (0xf000 & opcode) >> 8;
+	u8 n2 = (0x0f00 & opcode) >> 4;
+	u8 n3 = 0x00f0 & opcode;
+	u8 n4 = (0x000f & opcode) << 4;
+	switch (n1)
 	{
-	case 0x00:
-		if (nibble3 == (u8)0xe0)
+		case _0:
 		{
-			if (nibble4 == (u8)0x00)
+			if (n3 == _E)
 			{
-				ClearScreen();
+				if (n4 == _0) // Clear Screen
+				{
+					ClearScreen();
+				}
+				else if (n4 == _E) // Subroutine Return
+				{
+
+				}
+				else
+				{
+					assert(true); // unhandled instruction!
+				}
 			}
-			else if (nibble4 == (u8)0xe0)
-			{
-				// subroutine return
-			}
+			break;
 		}
-		break;
-	case 0x10:
-		// jump
-		//u16 jump = nibble4 | (nibble3 << 4) | (nibble2 << 8);
-		m_pc = (u16*)((m_ram + PROGRAM_OFFSET) + (nibble4 | (nibble3 << 4) | (nibble2 << 8)));
-		break;
-	case 0x20:
-		
-		break;
-	default:
-		break;
+		case _1: // Jump
+		{
+			m_pc = (u16*)(m_ram + _NNN);
+			break;
+		}
+		case _2: // Execute Subroutine
+		{
+			m_stack[m_stackIdx] = *m_pc;
+			m_stackIdx += 1;
+			m_pc = (u16*)(m_ram + _NNN);
+			break;
+		}
+		case _6: // Set
+		{
+			m_V[_X] = _NN;
+			break;
+		}
+		case _7: // Add
+		{
+			m_V[_X] += _NN;
+			break;
+		}
+		case _A: // Set index
+		{
+			m_I = (u16*)(m_ram + _NNN);
+			break;
+		}
+		case _D: // Display
+		{
+			int _x = m_V[_X] % WIDTH_PIXELS;
+			int _y = m_V[_Y];
+			u8* _i = (u8*)m_I;
+			bool setFlag = false;
+
+			for (int y = 0; y < _N; y++)
+			{
+				u8 drawMask = 0x80;
+				for (int x = 0; x < 8; x++)
+				{
+					if (*_i & drawMask)
+					{
+						int renderPos = (_x + x) + ((_y + y) * WIDTH_PIXELS);
+						m_renderData[renderPos] = !m_renderData[renderPos];
+						if (!m_renderData[renderPos])
+						{
+							setFlag = true;
+						}
+					}
+					drawMask = (drawMask >> 1);
+					if (x == 0)
+					{
+						drawMask = drawMask ^ 0x80;
+					}
+				}
+				_i++;
+			}
+			_VF = setFlag;
+			break;
+		}
+		default:
+		{
+			assert(true); // unhandled instruction!
+			break;
+		}
 	}
 }
 
