@@ -15,29 +15,22 @@
 #define FONT_OFFSET (80)
 
 // nibbles
-#define _0 (u8)0x00
-#define _1 (u8)0x10
-#define _2 (u8)0x20
-#define _3 (u8)0x30
-#define _4 (u8)0x40
-#define _5 (u8)0x50
-#define _6 (u8)0x60
-#define _7 (u8)0x70
-#define _8 (u8)0x80
-#define _9 (u8)0x90
-#define _A (u8)0xa0
-#define _B (u8)0xb0
-#define _C (u8)0xc0
-#define _D (u8)0xd0
-#define _E (u8)0xe0
-#define _F (u8)0xf0
-
-// opcode decoders
-#define _X ((u8)((n2 >> 4) & 0x0f))
-#define _Y ((u8)((n3 >> 4) & 0x0f))
-#define _N ((u8)((n4 >> 4) & 0x0f))
-#define _NN ((u8)((n4 >> 4) & 0x0f) | n3)
-#define _NNN ((u8)((n4 >> 4) & 0x0f) | n3 | (n2 << 4))
+#define _0 0x00
+#define _1 0x01
+#define _2 0x02
+#define _3 0x03
+#define _4 0x04
+#define _5 0x05
+#define _6 0x06
+#define _7 0x07
+#define _8 0x08
+#define _9 0x09
+#define _A 0x0a
+#define _B 0x0b
+#define _C 0x0c
+#define _D 0x0d
+#define _E 0x0e
+#define _F 0x0f
 
 // VF
 #define _VF (m_V[0x0f])
@@ -93,19 +86,21 @@ void c8e_CPU::LoadRom()
 	std::streamsize size = file.tellg();
 	file.seekg(0, std::ios::beg);
 
-	file.read(m_ram + PROGRAM_OFFSET, size);
+	file.read((char*)m_ram + PROGRAM_OFFSET, size);
 }
 
 c8e_CPU::~c8e_CPU()
 {
 	free(m_ram);
+	free(m_stack);
+	free(m_V);
 	free(m_renderData);
 }
 
 bool c8e_CPU::ExecuteInstructionCycle()
 {
 	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-	double dt = (now - m_prevDelta) / std::chrono::microseconds(1);
+	double dt = (double)((now - m_prevDelta) / std::chrono::microseconds(1));
 	m_prevDelta = now;
 
 	double clockTick = 1000000 / m_clockspeed;
@@ -145,31 +140,30 @@ u16 c8e_CPU::Fetch()
 	// advance program counter
 	m_pc += 1;
 
-	// flip the bits (endian?? ask matt)
-	u16 temp = val >> 8;
-	val = (val << 8) | temp;
-
 	// return instruction
 	return val;
 }
 
+#define _INSTRUCTION(val) ((val >> 4) & 0x0f)
+#define _X(val) ((val >> 0) & 0x0f)
+#define _Y(val) ((val >> 12)  & 0x0f)
+#define _N(val) ((val >> 8) & 0x0f)
+#define _NN(val) ((_Y(val) << 4) | _N(val))
+#define _NNN(val) ((_X(val) << 8) | (_Y(val) << 4) | _N(val))
+
 void c8e_CPU::Decode(u16 opcode)
 {
-	u8 n1 = (0xf000 & opcode) >> 8;
-	u8 n2 = (0x0f00 & opcode) >> 4;
-	u8 n3 = 0x00f0 & opcode;
-	u8 n4 = (0x000f & opcode) << 4;
-	switch (n1)
+	switch (_INSTRUCTION(opcode))
 	{
 		case _0:
 		{
-			if (n3 == _E)
+			if (_Y(opcode) == _E)
 			{
-				if (n4 == _0) // Clear Screen
+				if (_N(opcode) == _0) // Clear Screen
 				{
 					ClearScreen();
 				}
-				else if (n4 == _E) // Subroutine Return
+				else if (_N(opcode) == _E) // Subroutine Return
 				{
 
 				}
@@ -182,40 +176,43 @@ void c8e_CPU::Decode(u16 opcode)
 		}
 		case _1: // Jump
 		{
-			m_pc = (u16*)(m_ram + _NNN);
+			m_pc = (u16*)(m_ram + _NNN(opcode));
 			break;
 		}
 		case _2: // Execute Subroutine
 		{
 			m_stack[m_stackIdx] = *m_pc;
 			m_stackIdx += 1;
-			m_pc = (u16*)(m_ram + _NNN);
+			m_pc = (u16*)(m_ram + _NNN(opcode));
 			break;
 		}
 		case _6: // Set
 		{
-			m_V[_X] = _NN;
+			m_V[_X(opcode)] = _NN(opcode);
 			break;
 		}
 		case _7: // Add
 		{
-			m_V[_X] += _NN;
+			m_V[_X(opcode)] += _NN(opcode);
 			break;
 		}
 		case _A: // Set index
 		{
-			m_I = (u16*)(m_ram + _NNN);
+			m_I = (u16*)(m_ram + _NNN(opcode));
 			break;
 		}
 		case _D: // Display
 		{
-			int _x = m_V[_X] % WIDTH_PIXELS;
-			int _y = m_V[_Y];
+			int _x = m_V[_X(opcode)] % WIDTH_PIXELS;
+			int _y = m_V[_Y(opcode)];
 			u8* _i = (u8*)m_I;
 			bool setFlag = false;
 
-			for (int y = 0; y < _N; y++)
+			for (int y = 0; y < _N(opcode); y++)
 			{
+				//int renderPos = _x + ((_y + y) * WIDTH_PIXELS);
+				//m_renderData[renderPos] = m_renderData[renderPos] ^ 
+				
 				u8 drawMask = 0x80;
 				for (int x = 0; x < 8; x++)
 				{
@@ -229,10 +226,6 @@ void c8e_CPU::Decode(u16 opcode)
 						}
 					}
 					drawMask = (drawMask >> 1);
-					if (x == 0)
-					{
-						drawMask = drawMask ^ 0x80;
-					}
 				}
 				_i++;
 			}
