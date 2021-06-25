@@ -13,41 +13,21 @@
 #define STACK_SIZE (16)
 #define NUM_REGISTERS (16)
 #define FONT_OFFSET (80)
-
-// nibbles
-#define _0 0x00
-#define _1 0x01
-#define _2 0x02
-#define _3 0x03
-#define _4 0x04
-#define _5 0x05
-#define _6 0x06
-#define _7 0x07
-#define _8 0x08
-#define _9 0x09
-#define _A 0x0a
-#define _B 0x0b
-#define _C 0x0c
-#define _D 0x0d
-#define _E 0x0e
-#define _F 0x0f
-
-// VF
-#define _VF (m_V[0x0f])
+#define FONT_HEIGHT (5)
 
 c8e_CPU::c8e_CPU()
 {
 	m_ram = (u8*)calloc(RAM_SIZE, sizeof(u8));
 	m_pc = (u16*)(m_ram + PROGRAM_OFFSET);
 
-	m_stack = (u16*)calloc(STACK_SIZE, sizeof(u16));
+	m_stack = (u16**)calloc(STACK_SIZE, sizeof(u16*));
 	m_stackIdx = 0;
 
 	m_V = (u8*)calloc(NUM_REGISTERS, sizeof(u16));
 
 	InitFont();
 
-	m_renderData = (bool*) malloc((64 * 32) * sizeof(bool));
+	m_renderData = (bool*) malloc((WIDTH_PIXELS * HEIGHT_PIXELS) * sizeof(bool));
 	ClearScreen();
 
 	LoadRom();
@@ -73,7 +53,7 @@ void c8e_CPU::InitFont()
 		0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
 		0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 	};
-	for (int i = 0; i < (16 * 5); i++)
+	for (int i = 0; i < (16 * FONT_HEIGHT); i++)
 	{
 		m_ram[FONT_OFFSET + i] = fontData[i];
 	}
@@ -81,7 +61,14 @@ void c8e_CPU::InitFont()
 
 void c8e_CPU::LoadRom()
 {
-	std::ifstream file("IBMLogo.ch8", std::ios::binary | std::ios::ate);
+	//const char* romName = "IBMLogo.ch8";
+	//const char* romName = "bc_test.ch8";
+	//const char* romName = "test_opcode.ch8";
+	//const char* romName = "rockto.ch8";
+	//const char* romName = "RPS.ch8";
+	//const char* romName = "cavern.ch8";
+	const char* romName = "chipquarium.ch8";
+	std::ifstream file(romName, std::ios::binary | std::ios::ate);
 	file.seekg(0, std::ios::end);
 	std::streamsize size = file.tellg();
 	file.seekg(0, std::ios::beg);
@@ -97,7 +84,7 @@ c8e_CPU::~c8e_CPU()
 	free(m_renderData);
 }
 
-bool c8e_CPU::ExecuteInstructionCycle()
+bool c8e_CPU::AdvanceTime()
 {
 	std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
 	double dt = (double)((now - m_prevDelta) / std::chrono::microseconds(1));
@@ -107,8 +94,7 @@ bool c8e_CPU::ExecuteInstructionCycle()
 	double timerTick = 1000000 / m_timerspeed;
 
 	m_clockCount += dt;
-	m_delayCount += dt;
-	m_soundCount += dt;
+	m_timerCount += dt;
 
 	if (m_clockCount >= clockTick)
 	{
@@ -119,12 +105,19 @@ bool c8e_CPU::ExecuteInstructionCycle()
 		Decode(opcode);
 	}
 
-	if (m_delayCount >= timerTick)
+	if (m_timerCount >= timerTick)
 	{
 		// update timers
-		m_delayCount = fmod(m_delayCount, timerTick);
-		//m_soundCount = fmod(m_soundCount, timerTick);
-		return true;
+		m_timerCount = fmod(m_timerCount, timerTick);
+		if (m_delayCount)
+		{
+			m_delayCount--;
+		}
+		if (m_soundCount)
+		{
+			m_soundCount--;
+		}
+		return true; // Only render 60 times a second
 	}
 	else
 	{
@@ -150,22 +143,24 @@ u16 c8e_CPU::Fetch()
 #define _N(val) ((val >> 8) & 0x0f)
 #define _NN(val) ((_Y(val) << 4) | _N(val))
 #define _NNN(val) ((_X(val) << 8) | (_Y(val) << 4) | _N(val))
+#define _VF (m_V[0x0f])
 
 void c8e_CPU::Decode(u16 opcode)
 {
 	switch (_INSTRUCTION(opcode))
 	{
-		case _0:
+		case 0x00:
 		{
-			if (_Y(opcode) == _E)
+			if (_Y(opcode) == 0x0e)
 			{
-				if (_N(opcode) == _0) // Clear Screen
+				if (_N(opcode) == 0x00) // Clear Screen
 				{
 					ClearScreen();
 				}
-				else if (_N(opcode) == _E) // Subroutine Return
+				else if (_N(opcode) == 0x0e) // Subroutine return (pop)
 				{
-
+					m_stackIdx -= 1;
+					m_pc = m_stack[m_stackIdx];
 				}
 				else
 				{
@@ -174,51 +169,158 @@ void c8e_CPU::Decode(u16 opcode)
 			}
 			break;
 		}
-		case _1: // Jump
+		case 0x01: // Jump
 		{
 			m_pc = (u16*)(m_ram + _NNN(opcode));
 			break;
 		}
-		case _2: // Execute Subroutine
+		case 0x02: // Call Subroutine (push)
 		{
-			m_stack[m_stackIdx] = *m_pc;
+			m_stack[m_stackIdx] = m_pc;
 			m_stackIdx += 1;
-			m_pc = (u16*)(m_ram + _NNN(opcode));
+			m_pc = (u16*)&m_ram[_NNN(opcode)];
 			break;
 		}
-		case _6: // Set
+		case 0x03: // Skip if equal to immediate
+		{
+			if (m_V[_X(opcode)] == _NN(opcode))
+			{
+				m_pc += 1;
+			}
+			break;
+		}
+		case 0x04: // Skip if not equal to immediate
+		{
+			if (m_V[_X(opcode)] != _NN(opcode))
+			{
+				m_pc += 1;
+			}
+			break;
+		}
+		case 0x05: // Skip if registers are equal
+		{
+			if (m_V[_X(opcode)] == m_V[_Y(opcode)])
+			{
+				m_pc += 1;
+			}
+			break;
+		}
+		case 0x09: // Skip if registers are not equal
+		{
+			if (m_V[_X(opcode)] != m_V[_Y(opcode)])
+			{
+				m_pc += 1;
+			}
+			break;
+		}
+		case 0x06: // Set
 		{
 			m_V[_X(opcode)] = _NN(opcode);
 			break;
 		}
-		case _7: // Add
+		case 0x07: // Add
 		{
 			m_V[_X(opcode)] += _NN(opcode);
 			break;
 		}
-		case _A: // Set index
+		case 0x08: // Arithmetic instructions
 		{
-			m_I = (u16*)(m_ram + _NNN(opcode));
+			switch (_N(opcode))
+			{
+				case 0x00: // Set
+				{
+					m_V[_X(opcode)] = m_V[_Y(opcode)];
+					break;
+				}
+				case 0x01: // OR
+				{
+					m_V[_X(opcode)] = m_V[_X(opcode)] | m_V[_Y(opcode)];
+					break;
+				}
+				case 0x02: // AND
+				{
+					m_V[_X(opcode)] = m_V[_X(opcode)] & m_V[_Y(opcode)];
+					break;
+				}
+				case 0x03: // XOR
+				{
+					m_V[_X(opcode)] = m_V[_X(opcode)] ^ m_V[_Y(opcode)];
+					break;
+				}
+				case 0x04: // Add
+				{
+					u8 val = m_V[_X(opcode)] + m_V[_Y(opcode)];
+					_VF = (val < m_V[_X(opcode)]) || (val < m_V[_Y(opcode)]);
+					m_V[_X(opcode)] = val;
+					break;
+				}
+				case 0x05: // Subtraction (X - Y)
+				{
+					_VF = (m_V[_X(opcode)] >= m_V[_Y(opcode)]);
+					m_V[_X(opcode)] = m_V[_X(opcode)] - m_V[_Y(opcode)];
+					break;
+				}
+				case 0x07: // Subtraction (Y - X)
+				{
+					_VF = (m_V[_Y(opcode)] >= m_V[_X(opcode)]);
+					m_V[_X(opcode)] = m_V[_Y(opcode)] - m_V[_X(opcode)];
+					break;
+				}
+				case 0x06: // Shift right
+				{
+					_VF = m_V[_X(opcode)] & 0x01;
+					m_V[_X(opcode)] = m_V[_X(opcode)] >> 1;
+					break;
+				}
+				case 0x0e: // Shift left
+				{
+					_VF = (m_V[_X(opcode)] & 0x80) > 0;
+					m_V[_X(opcode)] = m_V[_X(opcode)] << 1;
+					break;
+				}
+				default:
+				{
+					assert(true); // unhandled instruction!
+					break;
+				}
+			}
 			break;
 		}
-		case _D: // Display
+		case 0x0a: // Set index
+		{
+			m_I = _NNN(opcode);
+			break;
+		}
+		case 0x0b: // Jump with offset
+		{
+			m_pc = (u16*)m_ram[_NNN(opcode) + m_V[0]];
+			break;
+		}
+		case 0x0c: // Random
+		{
+			u16 rnd = rand() % 256;
+			m_V[_X(opcode)] = rnd & _NN(opcode);
+			break;
+		}
+		case 0x0d: // Display
 		{
 			int _x = m_V[_X(opcode)] % WIDTH_PIXELS;
-			int _y = m_V[_Y(opcode)];
-			u8* _i = (u8*)m_I;
+			int _y = m_V[_Y(opcode)] % HEIGHT_PIXELS;
+			u8* _i = &m_ram[m_I];
 			bool setFlag = false;
 
 			for (int y = 0; y < _N(opcode); y++)
 			{
-				//int renderPos = _x + ((_y + y) * WIDTH_PIXELS);
-				//m_renderData[renderPos] = m_renderData[renderPos] ^ 
-				
+				int currentY = _y + y;
+				if (currentY >= HEIGHT_PIXELS) { break; }
 				u8 drawMask = 0x80;
 				for (int x = 0; x < 8; x++)
 				{
-					if (*_i & drawMask)
+					int currentX = _x + x;
+					if (currentX >= WIDTH_PIXELS) { break; }
+					if (_i[y] & drawMask)
 					{
-						int renderPos = (_x + x) + ((_y + y) * WIDTH_PIXELS);
+						int renderPos = currentX + (currentY * WIDTH_PIXELS);
 						m_renderData[renderPos] = !m_renderData[renderPos];
 						if (!m_renderData[renderPos])
 						{
@@ -227,9 +329,116 @@ void c8e_CPU::Decode(u16 opcode)
 					}
 					drawMask = (drawMask >> 1);
 				}
-				_i++;
 			}
 			_VF = setFlag;
+			break;
+		}
+		case 0x0e: // Skip based on input
+		{
+			switch (_NN(opcode))
+			{
+				case 0x9e: // Skip if key pressed
+				{
+					if (m_input[m_V[_X(opcode)]])
+					{
+						m_pc += 1;
+					}
+					break;
+				}
+				case 0xa1: // Skip if key not pressed
+				{
+					if (!m_input[m_V[_X(opcode)]])
+					{
+						m_pc += 1;
+					}
+					break;
+				}
+				default:
+				{
+					assert(true); // unhandled instruction!
+					break;
+				}
+			}
+			break;
+		}
+		case 0x0f: // Miscellaneous
+		{
+			switch (_NN(opcode))
+			{
+				case 0x07: // Read delay timer
+				{
+					m_V[_X(opcode)] = m_delayCount;
+					break;
+				}
+				case 0x15: // Set delay timer
+				{
+					m_delayCount = m_V[_X(opcode)];
+					break;
+				}
+				case 0x18: // Set sound timer
+				{
+					m_soundCount = m_V[_X(opcode)];
+					break;
+				}
+				case 0x0a: // Wait for input
+				{
+					for (u8 i = 0; i <= 0x0f; i++)
+					{
+						if (m_input[i])
+						{
+							m_V[_X(opcode)] = i;
+							return;
+						}
+					}
+					m_pc -= 1;
+					break;
+				}
+				case 0x1e: // Add to index
+				{
+					u16 newOffset = m_I + m_V[_X(opcode)];
+					_VF = newOffset < m_I;
+					m_I = newOffset;
+					break;
+				}
+				case 0x29: // Font character
+				{
+					u8 ch = ((m_V[_X(opcode)] & 0x0F) * FONT_HEIGHT);
+					m_I = FONT_OFFSET + ch;
+					break;
+				}
+				case 0x33: // Binary-coded decimal conversion
+				{
+					u8 dec = m_V[_X(opcode)];
+					u8 dec1 = dec / 100;
+					u8 dec2 = (dec % 100) / 10;
+					u8 dec3 = (dec % 10);
+					m_ram[m_I] = dec1;
+					m_ram[m_I + 1] = dec2;
+					m_ram[m_I + 2] = dec3;
+					break;
+				}
+				case 0x55: // Store memory
+				{
+					for (int i = 0; i <= m_V[_X(opcode)]; i++)
+					{
+						m_ram[m_I + i] = m_V[i];
+					}
+					break;
+				}
+				case 0x65: // Load memory
+				{
+					for (int i = 0; i <= m_V[_X(opcode)]; i++)
+					{
+						m_V[i] = m_ram[m_I + i];
+					}
+					break;
+				}
+				default:
+				{
+					assert(true); // unhandled instruction!
+					break;
+				}
+			}
 			break;
 		}
 		default:
@@ -242,7 +451,7 @@ void c8e_CPU::Decode(u16 opcode)
 
 void c8e_CPU::ClearScreen()
 {
-	for (int i = 0; i < (64 * 32); i++)
+	for (int i = 0; i < (WIDTH_PIXELS * HEIGHT_PIXELS); i++)
 	{
 		m_renderData[i] = 0;
 	}

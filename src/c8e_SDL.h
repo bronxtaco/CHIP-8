@@ -10,10 +10,15 @@ public:
 
 	void Render(bool* renderData);
 	double GetDeltaTime();
+	bool* GetKeys();
+	bool QuitEmulator() { return m_escape; }
 
 private:
 	SDL_Window* m_window = NULL;
 	SDL_Renderer* m_renderer = NULL;
 
 	Uint64 m_prevDelta = SDL_GetPerformanceCounter();
+
+	bool* m_keys;
+	bool m_escape;
 };

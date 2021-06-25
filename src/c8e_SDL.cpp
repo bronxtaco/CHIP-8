@@ -54,15 +54,17 @@ c8e_SDL::c8e_SDL(const char* title)
 
 			//Update the surface
 			SDL_UpdateWindowSurface(m_window);
-
-			//Wait two seconds
-			SDL_Delay(2000);
 		}
 	}
+
+	// Keyboard input state
+	m_keys = (bool*)calloc(NUM_KEYS, sizeof(bool));
 }
 
 c8e_SDL::~c8e_SDL()
 {
+	free(m_keys);
+
 	//Destroy window
 	SDL_DestroyWindow(m_window);
 
@@ -106,5 +108,31 @@ double c8e_SDL::GetDeltaTime()
 	double dt = ((currentTime - m_prevDelta) * 1000000 / (double)SDL_GetPerformanceFrequency());
 	m_prevDelta = currentTime;
 	return dt;
-	
+}
+
+bool* c8e_SDL::GetKeys()
+{
+	SDL_PumpEvents();
+	const Uint8* keys = SDL_GetKeyboardState(NULL);
+
+	m_keys[0x00] = keys[SDL_SCANCODE_X];
+	m_keys[0x01] = keys[SDL_SCANCODE_1];
+	m_keys[0x02] = keys[SDL_SCANCODE_2];
+	m_keys[0x03] = keys[SDL_SCANCODE_3];
+	m_keys[0x04] = keys[SDL_SCANCODE_Q];
+	m_keys[0x05] = keys[SDL_SCANCODE_W];
+	m_keys[0x06] = keys[SDL_SCANCODE_E];
+	m_keys[0x07] = keys[SDL_SCANCODE_A];
+	m_keys[0x08] = keys[SDL_SCANCODE_S];
+	m_keys[0x09] = keys[SDL_SCANCODE_D];
+	m_keys[0x0a] = keys[SDL_SCANCODE_Z];
+	m_keys[0x0b] = keys[SDL_SCANCODE_C];
+	m_keys[0x0c] = keys[SDL_SCANCODE_4];
+	m_keys[0x0d] = keys[SDL_SCANCODE_R];
+	m_keys[0x0e] = keys[SDL_SCANCODE_F];
+	m_keys[0x0f] = keys[SDL_SCANCODE_V];
+
+	m_escape = keys[SDL_SCANCODE_ESCAPE];
+
+	return m_keys;
 }

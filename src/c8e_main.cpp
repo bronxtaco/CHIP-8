@@ -8,24 +8,34 @@
 
 int main(int argc, char* args[])
 {
-	// initialize SDL
+	// initialize
 	c8e_SDL* sdl = new c8e_SDL(PROGRAM_TITLE);
-
-	// initialize CPU
-	c8e_CPU* cpu = new c8e_CPU();
+	c8e_CPU* chip8 = new c8e_CPU();
 
 	// run loop cycle
 	for (;;)
 	{
-		if (cpu->ExecuteInstructionCycle())
+		chip8->UpdateInput(sdl->GetKeys());
+		
+		if (sdl->QuitEmulator())
 		{
-			sdl->Render(cpu->GetRenderData());
+			break;
+		}
+
+		if (chip8->AdvanceTime())
+		{
+			sdl->Render(chip8->GetRenderData());
+		}
+
+		if (chip8->GetSoundActive())
+		{
+			// play sound
 		}
 	}
 
 	// cleanup
 	delete(sdl);
-	delete(cpu);
+	delete(chip8);
 
 	return 0;
 }

@@ -14,10 +14,12 @@ public:
 	c8e_CPU();
 	~c8e_CPU();
 
+	void UpdateInput(bool* keys) { m_input = keys; }
 	int GetClockSpeed() { return m_clockspeed; }
 	bool* GetRenderData() {	return m_renderData; }
+	bool GetSoundActive() { return m_soundCount > 0; }
 
-	bool ExecuteInstructionCycle();
+	bool AdvanceTime();
 
 private:
 	void InitFont();
@@ -33,18 +35,21 @@ private:
 	double m_clockCount = 0;
 
 	int m_timerspeed = TIMERSPEED;
-	double m_delayCount = 0;
-	double m_soundCount = 0;
+	double m_timerCount = 0;
+	u8 m_delayCount = 0;
+	u8 m_soundCount = 0;
 
 	u8* m_ram; // memory
 	u16* m_pc; // program counter
 
-	u16* m_stack; // stack of addresses
+	u16** m_stack; // stack of addresses
 	int m_stackIdx;
 
-	u16* m_I; // index register
+	u16 m_I; // index register
 
 	u8* m_V; // variable registers
+
+	bool* m_input; // keyboard state
 
 	bool* m_renderData; // array of booleans to render (true) or not (false)
 };
