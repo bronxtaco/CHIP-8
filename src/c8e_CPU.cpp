@@ -62,11 +62,12 @@ void c8e_CPU::LoadRom()
 {
 	//const char* romName = "IBMLogo.ch8";
 	//const char* romName = "bc_test.ch8";
-	//const char* romName = "test_opcode.ch8";
+	const char* romName = "test_opcode.ch8";
 	//const char* romName = "rockto.ch8";
 	//const char* romName = "RPS.ch8";
 	//const char* romName = "cavern.ch8";
-	const char* romName = "chipquarium.ch8";
+	//const char* romName = "chipquarium.ch8";
+	//const char* romName = "Breakout.ch8";
 	std::ifstream file(romName, std::ios::binary | std::ios::ate);
 	file.seekg(0, std::ios::end);
 	std::streamsize size = file.tellg();
