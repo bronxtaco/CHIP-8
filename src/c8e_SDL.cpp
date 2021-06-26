@@ -9,7 +9,7 @@
 #define SCREEN_WIDTH (PIXEL_SIZE * WIDTH_PIXELS)
 #define SCREEN_HEIGHT (PIXEL_SIZE * HEIGHT_PIXELS)
 #define BACK_COLOUR 0x00, 0x00, 0x00
-#define FORE_COLOUR 0xFF, 0xFF, 0xFF
+#define FORE_COLOUR 0xff, 0xff, 0xff
 
 c8e_SDL::c8e_SDL(const char* title)
 {
@@ -49,7 +49,7 @@ c8e_SDL::c8e_SDL(const char* title)
 			//Get window surface
 			screenSurface = SDL_GetWindowSurface(m_window);
 
-			//Fill the surface white
+			//Fill the surface with backcolor
 			SDL_FillRect(screenSurface, NULL, SDL_MapRGB(screenSurface->format, BACK_COLOUR));
 
 			//Update the surface
@@ -79,13 +79,19 @@ void c8e_SDL::Render(bool* renderData)
 	int count = 0;
 	while (count < (WIDTH_PIXELS * HEIGHT_PIXELS))
 	{
+		// Make a rectangle (pixel)
+		SDL_Rect fillRect = { xPos * PIXEL_SIZE, yPos * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE };
+
+		// Set pixel color
 		if (renderData[count])
 		{
-			// Render rectangle
-			SDL_Rect fillRect = { xPos * PIXEL_SIZE, yPos * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE };
-			SDL_SetRenderDrawColor(m_renderer, FORE_COLOUR, 0xFF);
-			SDL_RenderFillRect(m_renderer, &fillRect);
+			SDL_SetRenderDrawColor(m_renderer, FORE_COLOUR, 0xff);
 		}
+		else
+		{
+			SDL_SetRenderDrawColor(m_renderer, BACK_COLOUR, 0xff);
+		}
+		SDL_RenderFillRect(m_renderer, &fillRect);
 		count++;
 		if (count % WIDTH_PIXELS == 0)
 		{

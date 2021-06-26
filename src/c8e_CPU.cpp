@@ -27,8 +27,7 @@ c8e_CPU::c8e_CPU()
 
 	InitFont();
 
-	m_renderData = (bool*) malloc((WIDTH_PIXELS * HEIGHT_PIXELS) * sizeof(bool));
-	ClearScreen();
+	m_renderData = (bool*)calloc((WIDTH_PIXELS * HEIGHT_PIXELS), sizeof(bool));
 
 	LoadRom();
 }
