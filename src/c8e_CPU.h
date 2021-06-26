@@ -45,7 +45,7 @@ private:
 	u16** m_stack; // stack of addresses
 	int m_stackIdx;
 
-	u16 m_I; // index register
+	u8* m_I; // index register
 
 	u8* m_V; // variable registers
 

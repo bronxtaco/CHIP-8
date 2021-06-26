@@ -287,7 +287,7 @@ void c8e_CPU::Decode(u16 opcode)
 		}
 		case 0x0a: // Set index
 		{
-			m_I = _NNN(opcode);
+			m_I = m_ram + _NNN(opcode);
 			break;
 		}
 		case 0x0b: // Jump with offset
@@ -305,7 +305,7 @@ void c8e_CPU::Decode(u16 opcode)
 		{
 			int _x = m_V[_X(opcode)] % WIDTH_PIXELS;
 			int _y = m_V[_Y(opcode)] % HEIGHT_PIXELS;
-			u8* _i = &m_ram[m_I];
+			u8* _i = m_I;
 			bool setFlag = false;
 
 			for (int y = 0; y < _N(opcode); y++)
@@ -394,15 +394,15 @@ void c8e_CPU::Decode(u16 opcode)
 				}
 				case 0x1e: // Add to index
 				{
-					u16 newOffset = m_I + m_V[_X(opcode)];
-					_VF = newOffset < m_I;
-					m_I = newOffset;
+					u8* newAddress = m_I + m_V[_X(opcode)];
+					_VF = newAddress < m_I;
+					m_I = newAddress;
 					break;
 				}
 				case 0x29: // Font character
 				{
 					u8 ch = ((m_V[_X(opcode)] & 0x0F) * FONT_HEIGHT);
-					m_I = FONT_OFFSET + ch;
+					m_I = m_ram + FONT_OFFSET + ch;
 					break;
 				}
 				case 0x33: // Binary-coded decimal conversion
@@ -411,24 +411,24 @@ void c8e_CPU::Decode(u16 opcode)
 					u8 dec1 = dec / 100;
 					u8 dec2 = (dec % 100) / 10;
 					u8 dec3 = (dec % 10);
-					m_ram[m_I] = dec1;
-					m_ram[m_I + 1] = dec2;
-					m_ram[m_I + 2] = dec3;
+					m_I[0] = dec1;
+					m_I[1] = dec2;
+					m_I[2] = dec3;
 					break;
 				}
 				case 0x55: // Store memory
 				{
-					for (int i = 0; i <= m_V[_X(opcode)]; i++)
+					for (int i = 0; i <= _X(opcode); i++)
 					{
-						m_ram[m_I + i] = m_V[i];
+						m_I[i] = m_V[i];
 					}
 					break;
 				}
 				case 0x65: // Load memory
 				{
-					for (int i = 0; i <= m_V[_X(opcode)]; i++)
+					for (int i = 0; i <= _X(opcode); i++)
 					{
-						m_V[i] = m_ram[m_I + i];
+						m_V[i] = m_I[i];
 					}
 					break;
 				}
