@@ -29,7 +29,11 @@ int main(int argc, char* args[])
 
 		if (chip8->GetSoundActive())
 		{
-			// play sound
+			sdl->PlaySound();
+		}
+		else
+		{
+			sdl->StopSound();
 		}
 	}
 

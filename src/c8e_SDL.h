@@ -13,6 +13,9 @@ public:
 	bool* GetKeys();
 	bool QuitEmulator() { return m_escape; }
 
+	void PlaySound();
+	void StopSound();
+
 private:
 	SDL_Window* m_window = NULL;
 	SDL_Renderer* m_renderer = NULL;
